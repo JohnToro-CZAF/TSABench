@@ -1,4 +1,5 @@
 import os
+import time
 import tqdm
 import json
 import numpy as np
@@ -7,11 +8,12 @@ import matplotlib.pyplot as plt
 import torch
 import torch.utils
 import torch.nn.functional as F
+from torch.nn import BCEWithLogitsLoss
 import torch.nn as nn
 import metrics
 from metrics import beautify
 
-SUPPORTED_TASKS = ["classification", "causal"]
+SUPPORTED_TASKS = ["classification", "causal", "multi_classification"]
 class EarlyStopper:
     def __init__(self, patience=50, min_delta=0, greater_is_better=False):
         self.patience = patience
@@ -49,6 +51,18 @@ class BaseLossFunction(nn.Module):
   def forward(self, input, output, label):
     raise NotImplementedError("forward method should be implemented")
 
+class MultiClassificationLossFunction(BaseLossFunction):
+  def __init__(self):
+    super(ClassificationLossFunction, self).__init__()
+
+  def forward(self, output, label):
+    # input : (batch_size, seq_len), output : (batch_size, seq_len, num_classes), label : (batch_size)
+    # get the (batch_size) tensor of positions that is different from padding token
+    loss_fct = BCEWithLogitsLoss()
+    loss = loss_fct(output, label)
+    return loss
+
+
 class ClassificationLossFunction(BaseLossFunction):
   def __init__(self):
     super(ClassificationLossFunction, self).__init__()
@@ -61,6 +75,8 @@ class ClassificationLossFunction(BaseLossFunction):
 def get_loss_fn(task: str):
   if task == "classification":
     return ClassificationLossFunction()
+  elif task == "multi_classification":
+    return MultiClassificationLossFunction()
   else:
     raise NotImplementedError(f"Task {task} not implemented")
 
@@ -151,31 +167,23 @@ class Trainer:
   def get_metrics_dict(self):
     return {metric["name"]: metrics.build(metric["name"], metric["args"]) for metric in self.metric_names}
   
-  def test_step(self, input, length, label):
-    input = input.to("cuda")
+  def test_step(self, input):
     with torch.no_grad():
-      output = self.model(input)
+      output = self.model(input) # logits only
     output = output.to("cpu")
-    # outputs : (batch_size, seq_len, num_classes)
+    # outputs : (batch_size, num_classes)
     # result : (batch_size, num_classes)
-    if self.model_type!='CNN':
-      if self.aggregation=='last':
-        output = output[range(input.size()[0]), length - 1]
-      elif self.aggregation=='mean':
-        output = torch.mean(output, axis=1)
-      elif self.aggregation=='max':
-        output = torch.max(output, axis=1).values
-    loss = self.loss_fn(output, label)
+    loss = self.loss_fn(output, input["label"])
     return output, loss.item()
 
   def test(self):
     test_loss = []
     test_metrics_dict = self.get_metrics_dict()
-    for input, length, label in self.test_loader:
-      output, loss = self.eval_step(input, length, label)
+    for input in self.test_loader:
+      output, loss = self.eval_step(input)
       test_loss.append(loss/input.size()[0])
       for metric_name, metric in test_metrics_dict.items():
-        metric.update(output, label)
+        metric.update(output, input["label"])
     
     avg_test_loss = sum(test_loss) / len(test_loss)
     result_metrics = {
@@ -194,31 +202,23 @@ class Trainer:
     for metric_name, value in result_metrics.items():
         self.metrics_log['test_metrics'][metric_name].append(value)
       
-  def eval_step(self, input, length, label):
-    input = input.to("cuda")
+  def eval_step(self, input):
     with torch.no_grad():
-      output = self.model(input)
+      output = self.model(input) # logits only
     output = output.to("cpu")
-    # outputs : (batch_size, seq_len, num_classes)
+    # outputs : (batch_size, num_classes)
     # result : (batch_size, num_classes)
-    if self.model_type!='CNN':
-      if self.aggregation=='last':
-        output = output[range(input.size()[0]), length - 1]
-      elif self.aggregation=='mean':
-        output = torch.mean(output, axis=1)
-      elif self.aggregation=='max':
-        output = torch.max(output, axis=1).values
-    loss = self.loss_fn(output, label)
+    loss = self.loss_fn(output, input["label"])
     return output, loss.item()
 
   def eval(self):
     val_loss = []
     eval_metrics_dict = self.get_metrics_dict()
-    for input, length, label in self.val_loader:
-      output, loss = self.eval_step(input, length, label)
+    for input in self.val_loader:
+      output, loss = self.eval_step(input)
       val_loss.append(loss/input.size()[0])
       for metric_name, metric in eval_metrics_dict.items():
-        metric.update(output, label)
+        metric.update(output, input["label"])
     
     avg_val_loss = sum(val_loss) / len(val_loss)
     result_metrics = {
@@ -243,22 +243,22 @@ class Trainer:
 
     return False
   
-  def train_step(self, input, length, label):
+  def train_step(self, input):
+    """
+    Returns:
+        loss: loss tensor float
+        output: output tensor float [batch_size, num_classes]
+    """
     self.optimizer.zero_grad()
-    input = input.to("cuda")
-    output = self.model(input) # output : (batch_size, seq_len, num_classes)
+    t0 = time.time()
+    output = self.model(input) # output : (batch_size, num_classes), logits only
+    print("Foward time: ", time.time() - t0)
     output = output.to("cpu")
-    if self.model_type!='CNN':
-      if self.aggregation=='last':
-        output = output[range(input.size()[0]), length - 1]
-      elif self.aggregation=='mean':
-        output = torch.mean(output[:, length-1], axis=1)
-      elif self.aggregation=='max':
-        output = torch.max(output[:, length-1], axis=1).values
-
-    loss = self.loss_fn(output, label)
+    t0 = time.time()
+    loss = self.loss_fn(output, input["label"])
     loss.backward()
     self.optimizer.step()
+    print("Backward time: ", time.time() - t0)
     
     # Record gradients if required
     if self.analysis_config.get('record_gradients', False):
@@ -278,18 +278,18 @@ class Trainer:
     data_iter = iter(self.train_loader)
     for step_id in tqdm.tqdm(range(self.args.training_steps)):
       try:
-        input, length, label = next(data_iter)
+        input = next(data_iter)
       except StopIteration:
         # one epoch is done
         data_iter = iter(self.train_loader)
-        input, length, label = next(data_iter)
+        input = next(data_iter)
       
-      output, loss = self.train_step(input, length, label) # output : (batch_size, seq_len, num_classes)
+      output, loss = self.train_step(input) # output : (batch_size, seq_len, num_classes)
       train_loss += loss
       
       # ! For logging analysis
       for metric_name, metric in data_metrics_dict.items():
-          metric.update(output, label)
+          metric.update(output, input["label"])
           value = metric.value()
           self.metrics_log['train_metrics'][metric_name].append(value)
       self.metrics_log['steps'].append(step_id + 1)
@@ -324,12 +324,12 @@ class Trainer:
     for epoch_id in progress_bar:
       epoch_loss = 0
       data_metrics_dict = self.get_metrics_dict() # ! reset metrics for each epoch
-      for input, length, label in self.train_loader:
-        output, loss = self.train_step(input, length, label) # output : (batch_size, seq_len, num_classes)
+      for input in tqdm.tqdm(self.train_loader):
+        output, loss = self.train_step(input) # output : (batch_size, seq_len, num_classes)
         epoch_loss += loss/input.size()[0]
         progress_bar.set_postfix(loss=f"{loss/input.size()[0]:.4f}")
         for metric_name, metric in data_metrics_dict.items():
-            metric.update(output, label)
+            metric.update(output, input["label"])
       
       # ! one epoch is done
       result_metrics = {

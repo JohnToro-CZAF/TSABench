@@ -14,21 +14,41 @@ from models import build_model
 from trainer import TrainingArgs
 
 SUPPORTED_TASKS = ["classification"]
+POSSIBLE_COLS = ["text", "sentence"]
 
 class ClassificationDataset(torch.utils.data.Dataset):
   def __init__(self, dataset, tokenizer):
     self.dataset = dataset
     self.tokenizer = tokenizer
+    self.items = []
+    key = None
+    for k in POSSIBLE_COLS:
+      if k in dataset.column_names:
+        key = k
+        break
+    if key is None:
+      raise ValueError(f"None of the possible columns {POSSIBLE_COLS} found in dataset")
+    for idx in range(len(dataset)):
+      item = self.dataset[idx]
+      text = item[key]
+      ids  = self.tokenizer.tokenize(text)["ids"]
+      self.items.append(
+        {
+          "text": text,
+          "label": item['label'],
+          "ids": ids,
+          "length": len(ids)
+        }
+      )
   
   def __len__(self):
     return len(self.dataset)
   
   def __getitem__(self, idx):
-    item = self.dataset[idx]
-    text = item["text"]
-    label = item["label"]
-    ids = self.tokenizer.tokenize(text)["ids"]
-    length = len(ids)
+    item = self.items[idx]
+    label = item['label']
+    ids = item['ids']
+    length = item['length']
     ids = torch.tensor(ids)
     return ids, length, label
 
@@ -60,37 +80,29 @@ def get_dataloaders(
     assert "path" in dataset_args, "Path not found in dataset args"
     dataset = load_dataset(dataset_args["path"])
   
-  if training_args.task == "classification":
+  if training_args.task == "classification" or training_args.task == "multi_classification":
     print("Tokenizer unk id:",tokenizer.unk_id)
-    train_dataset = ClassificationDataset(dataset["train"], tokenizer)
-    validation_dataset = ClassificationDataset(dataset["validation"], tokenizer)
-    test_dataset = ClassificationDataset(dataset["test"], tokenizer)
+    if "validation" in dataset:
+      train_dataset = ClassificationDataset(dataset["train"], tokenizer)
+      validation_dataset = ClassificationDataset(dataset["validation"], tokenizer)
+      test_dataset = ClassificationDataset(dataset["test"], tokenizer)
+    else:
+      train_dataset = dataset["train"]
+      test_dataset = dataset["test"]
+      if "validation" in dataset:
+          val_dataset = dataset["validation"]
+      else:
+          train_dataset, val_dataset = train_dataset.train_test_split(test_size=0.2, seed=42).values()
+      train_dataset = ClassificationDataset(train_dataset, tokenizer)
+      validation_dataset = ClassificationDataset(val_dataset, tokenizer)
+      test_dataset = ClassificationDataset(test_dataset, tokenizer)
+    print("Size of datasets: ", len(train_dataset), " ", len(validation_dataset), " ", len(test_dataset))
     
-    n_unks, n_total = 0, 0
-    for i in range(len(train_dataset)):
-      n_unks_i, n_total_i = train_dataset.count(i)
-      n_unks += n_unks_i
-      n_total += n_total_i
-    print(f"Train set: {n_unks} UNKs out of {n_total} tokens")
-    
-    n_unks, n_total = 0, 0
-    for i in range(len(validation_dataset)):
-      n_unks_i, n_total_i = validation_dataset.count(i)
-      n_unks += n_unks_i
-      n_total += n_total_i
-    print(f"Validation set: {n_unks} UNKs out of {n_total} tokens")
-    
-    n_unks, n_total = 0, 0
-    for i in range(len(test_dataset)):
-      n_unks_i, n_total_i = test_dataset.count(i)
-      n_unks += n_unks_i
-      n_total += n_total_i
-    print(f"Test set: {n_unks} UNKs out of {n_total} tokens")
-    # partial function to be used in DataLoader
     def padding_fn(batch):
       (xx, lengths, yy) = zip(*batch)
       xx_pad = pad_sequence(xx, batch_first=True, padding_value=tokenizer.pad_id)
-      return xx_pad, torch.tensor(lengths), torch.tensor(yy)
+      attention_mask = (xx_pad != tokenizer.pad_id).float()
+      return xx_pad, torch.tensor(lengths), torch.tensor(yy), attention_mask
     
     train_loader = DataLoader(train_dataset, batch_size=training_bs, shuffle=True, collate_fn=padding_fn)
     val_loader   = DataLoader(validation_dataset, batch_size=val_bs, shuffle=True, collate_fn=padding_fn)
