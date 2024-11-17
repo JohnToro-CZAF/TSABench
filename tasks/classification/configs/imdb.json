@@ -1,0 +1,43 @@
+{
+    "model_config": {
+        "model_type": "HF",
+        "args" : {
+            "dim_output": 2,
+            "arch_name": "t5-base",
+            "is_frozen": false,
+            "frozen_layers": []
+        }
+    },
+    "tokenizer_config": {
+        "tokenizer_type": "hf",
+        "args": {
+            "pretrained_path": "t5-base"
+        }
+    },
+    "trainer_args": {
+        "task": "classification",
+        "training_batch_size": 4,
+        "validation_batch_size": 4,
+        "learning_rate": 0.0005,
+        "epoch": 1
+    }, 
+    "metric_config": {
+        "metrics": [
+            {"name": "accuracy", "args": {}},
+            {"name": "f1", "args": {}},
+            {"name": "precision", "args": {}},
+            {"name": "recall", "args": {}}
+        ]
+    },
+    "data_config": {
+        "name": "imdb",
+        "is_huggingface": true,
+        "type": "classification"
+    },
+    "analysis_config": {
+        "output_dir": "experiments/imdb-t5-base",
+        "record_metrics": true,
+        "record_gradients": true,
+        "save_interval": 1000
+    }
+}

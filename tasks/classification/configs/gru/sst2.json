@@ -1,0 +1,48 @@
+{
+    "model_config": {
+        "model_type": "BiGRU",
+        "args" : {
+            "dim_input": 300,
+            "dim_hidden": 256,
+            "num_layers": 1,
+            "dim_output": 2,
+            "embedding_strategy": "word2vec",
+            "pretrained_path": "word2vec-google-news-300",
+            "embedding_frozen": false,
+            "context_window": 5,
+            "oov_handing": "average_context"
+        }
+    },
+    "tokenizer_config": {
+        "tokenizer_type": "nltk",
+        "args": {
+            "dataset": "sst2"
+        }
+    },
+    "trainer_args": {
+        "task": "classification",
+        "training_batch_size": 512,
+        "validation_batch_size": 512,
+        "learning_rate": 0.0001,
+        "epoch": 30
+    }, 
+    "metric_config": {
+        "metrics": [
+            {"name": "accuracy", "args": {}},
+            {"name": "f1", "args": {"num_classes": 2}},
+            {"name": "precision", "args": {"num_classes": 2}},
+            {"name": "recall", "args": {"num_classes": 2}}
+        ]
+    },
+    "data_config": {
+        "name": "sst2",
+        "is_huggingface": true,
+        "type": "classification"
+    },
+    "analysis_config": {
+        "output_dir": "experiments/rnn/sst2",
+        "record_metrics": true,
+        "record_gradients": true,
+        "save_interval": 1000
+    }
+}
