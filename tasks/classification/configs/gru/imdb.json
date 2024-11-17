@@ -40,7 +40,7 @@
         "type": "classification"
     },
     "analysis_config": {
-        "output_dir": "experiments/rnn/imdb",
+        "output_dir": "experiments/bigru/imdb",
         "record_metrics": true,
         "record_gradients": true,
         "save_interval": 1000

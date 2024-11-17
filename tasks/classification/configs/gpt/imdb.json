@@ -1,10 +1,12 @@
 {
     "model_config": {
-        "model_type": "BiDeepRNN",
+        "model_type": "GPT",
         "args" : {
             "dim_input": 300,
-            "dim_hidden": 256,
+            "dim_model": 256,
             "num_layers": 1,
+            "num_heads": 8,
+            "dim_ff": 256,
             "dim_output": 2,
             "embedding_strategy": "word2vec",
             "pretrained_path": "word2vec-google-news-300",
@@ -39,7 +41,7 @@
         "type": "classification"
     },
     "analysis_config": {
-        "output_dir": "experiments/rnn/imdb",
+        "output_dir": "experiments/gpt/imdb",
         "record_metrics": true,
         "record_gradients": true,
         "save_interval": 1000

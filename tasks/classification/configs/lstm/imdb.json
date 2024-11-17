@@ -1,6 +1,6 @@
 {
     "model_config": {
-        "model_type": "BiDeepRNN",
+        "model_type": "BiLSTM",
         "args" : {
             "dim_input": 300,
             "dim_hidden": 256,
@@ -39,7 +39,7 @@
         "type": "classification"
     },
     "analysis_config": {
-        "output_dir": "experiments/rnn/imdb",
+        "output_dir": "experiments/lstm/imdb",
         "record_metrics": true,
         "record_gradients": true,
         "save_interval": 1000

@@ -1,6 +1,6 @@
 {
     "model_config": {
-        "model_type": "BiDeepRNN",
+        "model_type": "BiLSTM",
         "args" : {
             "dim_input": 300,
             "dim_hidden": 256,
@@ -9,13 +9,14 @@
             "embedding_strategy": "word2vec",
             "pretrained_path": "word2vec-google-news-300",
             "embedding_frozen": false,
-            "oov_handing": "using_unk"
+            "context_window": 5,
+            "oov_handing": "average_context"
         }
     },
     "tokenizer_config": {
         "tokenizer_type": "nltk",
         "args": {
-            "dataset": "imdb"
+            "dataset": "rotten_tomatoes"
         }
     },
     "trainer_args": {
@@ -34,12 +35,12 @@
         ]
     },
     "data_config": {
-        "name": "imdb",
+        "name": "rotten_tomatoes",
         "is_huggingface": true,
         "type": "classification"
     },
     "analysis_config": {
-        "output_dir": "experiments/rnn/imdb",
+        "output_dir": "experiments/lstm/rotten_tomatoes",
         "record_metrics": true,
         "record_gradients": true,
         "save_interval": 1000

@@ -40,7 +40,7 @@
         "type": "classification"
     },
     "analysis_config": {
-        "output_dir": "experiments/rnn/sst2",
+        "output_dir": "experiments/bigru/sst2",
         "record_metrics": true,
         "record_gradients": true,
         "save_interval": 1000

@@ -40,7 +40,7 @@
         "type": "classification"
     },
     "analysis_config": {
-        "output_dir": "experiments/rnn/yelp_review_full",
+        "output_dir": "experiments/bigru/yelp_review_full",
         "record_metrics": true,
         "record_gradients": true,
         "save_interval": 1000

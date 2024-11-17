@@ -40,7 +40,7 @@
         "type": "classification"
     },
     "analysis_config": {
-        "output_dir": "experiments/rnn/rotten_tomatoes",
+        "output_dir": "experiments/bigru/rotten_tomatoes",
         "record_metrics": true,
         "record_gradients": true,
         "save_interval": 1000
