@@ -3,12 +3,13 @@ import time
 import tqdm
 import json
 import numpy as np
+from typing import Union, Tuple
 import matplotlib.pyplot as plt
 
 import torch
 import torch.utils
+from torch.utils.flop_counter import FlopCounterMode
 import torch.nn.functional as F
-from torch.nn import BCEWithLogitsLoss
 import torch.nn as nn
 import metrics
 from metrics import beautify
@@ -51,16 +52,16 @@ class BaseLossFunction(nn.Module):
   def forward(self, input, output, label):
     raise NotImplementedError("forward method should be implemented")
 
-class MultiClassificationLossFunction(BaseLossFunction):
-  def __init__(self):
-    super(ClassificationLossFunction, self).__init__()
+# class MultiClassificationLossFunction(BaseLossFunction):
+#   def __init__(self):
+#     super(ClassificationLossFunction, self).__init__()
 
-  def forward(self, output, label):
-    # input : (batch_size, seq_len), output : (batch_size, seq_len, num_classes), label : (batch_size)
-    # get the (batch_size) tensor of positions that is different from padding token
-    loss_fct = BCEWithLogitsLoss()
-    loss = loss_fct(output, label)
-    return loss
+#   def forward(self, output, label):
+#     # input : (batch_size, seq_len), output : (batch_size, seq_len, num_classes), label : (batch_size)
+#     # get the (batch_size) tensor of positions that is different from padding token
+#     loss_fct = BCEWithLogitsLoss()
+#     loss = loss_fct(output, label)
+#     return loss
 
 
 class ClassificationLossFunction(BaseLossFunction):
@@ -72,11 +73,26 @@ class ClassificationLossFunction(BaseLossFunction):
     # get the (batch_size) tensor of positions that is different from padding token
     return F.cross_entropy(output, label)
 
+def get_flops(model, inp: Union[torch.Tensor, Tuple], with_backward=False):
+    istrain = model.training
+    model.eval()
+    
+    inp = inp if isinstance(inp, torch.Tensor) else torch.randn(inp)
+
+    flop_counter = FlopCounterMode(mods=model, display=False, depth=None)
+    with flop_counter:
+        if with_backward:
+            model(inp).sum().backward()
+        else:
+            model(inp)
+    total_flops =  flop_counter.get_total_flops()
+    if istrain:
+        model.train()
+    return total_flops
+
 def get_loss_fn(task: str):
   if task == "classification":
     return ClassificationLossFunction()
-  elif task == "multi_classification":
-    return MultiClassificationLossFunction()
   else:
     raise NotImplementedError(f"Task {task} not implemented")
 
@@ -159,6 +175,9 @@ class Trainer:
         'val_steps': [],  # Add this line
         'grad_norms': [] if self.analysis_config.get('record_gradients', False) else None,
         'grad_steps': [] if self.analysis_config.get('record_gradients', False) else None,
+        'number_of_training_parameters': sum(p.numel() for p in model.parameters() if p.requires_grad),
+        'number_of_total_parameters': sum(p.numel() for p in model.parameters()),
+        'TFLOPs': None
     }
     self.output_dir = self.analysis_config.get('output_dir', 'output/exp1')
     self.aggregation = aggregation
@@ -169,7 +188,7 @@ class Trainer:
   
   def test_step(self, input):
     with torch.no_grad():
-      output = self.model(input) # logits only
+      output = self.model(input) # probs only
     output = output.to("cpu")
     # outputs : (batch_size, num_classes)
     # result : (batch_size, num_classes)
@@ -181,7 +200,8 @@ class Trainer:
     test_metrics_dict = self.get_metrics_dict()
     for input in self.test_loader:
       output, loss = self.eval_step(input)
-      test_loss.append(loss/input.size()[0])
+      bs = input["input_ids"].size(0)
+      test_loss.append(loss/bs)
       for metric_name, metric in test_metrics_dict.items():
         metric.update(output, input["label"])
     
@@ -204,7 +224,7 @@ class Trainer:
       
   def eval_step(self, input):
     with torch.no_grad():
-      output = self.model(input) # logits only
+      output = self.model(input) # probs only
     output = output.to("cpu")
     # outputs : (batch_size, num_classes)
     # result : (batch_size, num_classes)
@@ -215,8 +235,9 @@ class Trainer:
     val_loss = []
     eval_metrics_dict = self.get_metrics_dict()
     for input in self.val_loader:
+      bs = input["input_ids"].size(0)
       output, loss = self.eval_step(input)
-      val_loss.append(loss/input.size()[0])
+      val_loss.append(loss/bs)
       for metric_name, metric in eval_metrics_dict.items():
         metric.update(output, input["label"])
     
@@ -250,15 +271,12 @@ class Trainer:
         output: output tensor float [batch_size, num_classes]
     """
     self.optimizer.zero_grad()
-    t0 = time.time()
-    output = self.model(input) # output : (batch_size, num_classes), logits only
-    print("Foward time: ", time.time() - t0)
+    output = self.model(input) # output : (batch_size, num_classes), probs only
     output = output.to("cpu")
-    t0 = time.time()
+    # import ipdb; ipdb.set_trace()
     loss = self.loss_fn(output, input["label"])
     loss.backward()
     self.optimizer.step()
-    print("Backward time: ", time.time() - t0)
     
     # Record gradients if required
     if self.analysis_config.get('record_gradients', False):
@@ -284,8 +302,9 @@ class Trainer:
         data_iter = iter(self.train_loader)
         input = next(data_iter)
       
-      output, loss = self.train_step(input) # output : (batch_size, seq_len, num_classes)
+      output, loss = self.train_step(input) # output : (batch_size, num_classes)
       train_loss += loss
+      bs = input["input_ids"].size(0)
       
       # ! For logging analysis
       for metric_name, metric in data_metrics_dict.items():
@@ -293,7 +312,7 @@ class Trainer:
           value = metric.value()
           self.metrics_log['train_metrics'][metric_name].append(value)
       self.metrics_log['steps'].append(step_id + 1)
-      self.metrics_log['train_loss'].append(loss/input.size()[0])
+      self.metrics_log['train_loss'].append(loss/bs)
       
       # ! For printing
       if (step_id + 1) % self.args.metric_log_interval == 0:
@@ -323,13 +342,18 @@ class Trainer:
     progress_bar = tqdm.tqdm(range(self.args.epoch))
     for epoch_id in progress_bar:
       epoch_loss = 0
+      bs, input_seq_len, max_ids = 0, 0, 0
       data_metrics_dict = self.get_metrics_dict() # ! reset metrics for each epoch
       for input in tqdm.tqdm(self.train_loader):
-        output, loss = self.train_step(input) # output : (batch_size, seq_len, num_classes)
-        epoch_loss += loss/input.size()[0]
-        progress_bar.set_postfix(loss=f"{loss/input.size()[0]:.4f}")
+        bs = input["input_ids"].size(0)
+        input_seq_len = input["input_ids"].size(1)
+        max_ids = max(max_ids, input["input_ids"].max().item())
+        output, loss = self.train_step(input) # output : (batch_size, num_classes)
+        epoch_loss += loss/bs
+        progress_bar.set_postfix(loss=f"{loss/bs:.4f}")
         for metric_name, metric in data_metrics_dict.items():
             metric.update(output, input["label"])
+        del output
       
       # ! one epoch is done
       result_metrics = {
@@ -355,6 +379,9 @@ class Trainer:
     if self.args.save_model:
       torch.save(self.model.state_dict(), os.path.join(self.output_dir, 'model.pth'))
     self.test()
+    # calculate TFLOPs
+    rand_inp = torch.randint(0, max_ids, input_shape)
+    self.metrics_log['TFLOPs'] = get_flops(self.model, rand_inp, with_backward=True)
     self.save_metrics()
 
   def save_metrics(self):

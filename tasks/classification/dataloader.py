@@ -102,7 +102,14 @@ def get_dataloaders(
       (xx, lengths, yy) = zip(*batch)
       xx_pad = pad_sequence(xx, batch_first=True, padding_value=tokenizer.pad_id)
       attention_mask = (xx_pad != tokenizer.pad_id).float()
-      return xx_pad, torch.tensor(lengths), torch.tensor(yy), attention_mask
+      input = {
+        "input_ids": xx_pad,
+        "attention_mask": attention_mask,
+        "label": torch.tensor(yy),
+        "lengths": torch.tensor(lengths)
+      }
+      return input
+    
     
     train_loader = DataLoader(train_dataset, batch_size=training_bs, shuffle=True, collate_fn=padding_fn)
     val_loader   = DataLoader(validation_dataset, batch_size=val_bs, shuffle=True, collate_fn=padding_fn)

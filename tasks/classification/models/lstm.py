@@ -92,12 +92,14 @@ class MultilayerLSTM(nn.Module):
                 nn.init.xavier_uniform_(p)
 
     def forward(self, input):
-        batch_size = input.size(0)
-        device = input.device
+        ids = input["input_ids"]
+        lengths = input["lengths"]
+        ids = ids.to("cuda")
+        batch_size = ids.size(0)
+        device = ids.device
 
-        
         # Embedding layer
-        embedded = self.token_embedding(input)  # Shape: [batch_size, seq_len, embedding_dim]
+        embedded = self.token_embedding(ids)  # Shape: [batch_size, seq_len, embedding_dim]
 
         # Initialize hidden and cell states for all layers
         hidden_states = [layer.init_hidden(batch_size, device) for layer in self.lstm_layers]
@@ -116,12 +118,11 @@ class MultilayerLSTM(nn.Module):
 
             attn_output = torch.sum(attn_weights * outputs, dim=1)
             logits = self.fc(attn_output)
-            preds = self.softmax(logits)
-            return preds
+            return logits
         else:
-            outputs = self.fc(outputs)
-            outputs = self.softmax(outputs)
-            return outputs
+            logits = self.fc(outputs)
+            output = logits[range(batch_size), lengths - 1, :]
+            return output
 
 class BiLSTMSubLayer(nn.Module):
     def __init__(self, input_size, hidden_size):
@@ -200,11 +201,14 @@ class MultilayerBiLSTM(nn.Module):
                 nn.init.xavier_uniform_(p)
 
     def forward(self, input):
-        batch_size = input.size(0)
-        device = input.device
+        ids = input["input_ids"]
+        lengths = input["lengths"]
+        ids = ids.to("cuda")
+        batch_size = ids.size(0)
+        device = ids.device
 
         # Embedding layer
-        embedded = self.token_embedding(input)  # Shape: [batch_size, seq_len, embedding_dim]
+        embedded = self.token_embedding(ids)  # Shape: [batch_size, seq_len, embedding_dim]
 
         # Initialize hidden states for all layers
         hidden_states = [layer.init_hidden(batch_size, device) for layer in self.lstm_layers]
@@ -223,9 +227,8 @@ class MultilayerBiLSTM(nn.Module):
 
             attn_output = torch.sum(attn_weights * outputs, dim=1)
             logits = self.fc(attn_output)
-            preds = self.softmax(logits)
-            return preds
+            return logits
         else:
-            outputs = self.fc(outputs)
-            outputs = self.softmax(outputs)
-            return outputs
+            logits = self.fc(outputs)
+            output = logits[range(batch_size), lengths - 1, :]
+            return output

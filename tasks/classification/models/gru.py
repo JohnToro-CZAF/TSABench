@@ -91,11 +91,15 @@ class MultilayerGRU(nn.Module):
                 nn.init.xavier_uniform_(p)
 
     def forward(self, input):
-        batch_size = input.size(0)
-        device = input.device
+        ids = input["input_ids"]
+        lengths = input["lengths"]
+        
+        ids = ids.to("cuda")
+        device = ids.device
+        batch_size = ids.size(0)
 
         # Embedding layer
-        embedded = self.token_embedding(input)  # Shape: [batch_size, seq_len, dim_input]
+        embedded = self.token_embedding(ids)  # Shape: [batch_size, seq_len, dim_input]
 
         # Initialize hidden states for all layers
         hidden_states = [layer.init_hidden(batch_size, device) for layer in self.gru_layers]
@@ -114,12 +118,11 @@ class MultilayerGRU(nn.Module):
 
             attn_output = torch.sum(attn_weights * outputs, dim=1)
             logits = self.fc(attn_output)
-            preds = self.softmax(logits)
-            return preds
+            return logits
         else:
-            outputs = self.fc(outputs)
-            outputs = self.softmax(outputs)
-            return outputs
+            logits = self.fc(outputs)
+            output = logits[range(batch_size), lengths - 1, :]
+            return output
     
 class BiGRUSubLayer(nn.Module):
     def __init__(self, dim_input, dim_hidden):
@@ -197,11 +200,15 @@ class MultilayerBiGRU(nn.Module):
                 nn.init.xavier_uniform_(p)
 
     def forward(self, input):
-        batch_size = input.size(0)
-        device = input.device
+        ids = input["input_ids"]
+        lengths = input["lengths"]
+        
+        device = ids.device
+        batch_size = ids.size(0)
+        ids = ids.to("cuda")
 
         # Embedding layer
-        embedded = self.token_embedding(input)  # Shape: [batch_size, seq_len, dim_input]
+        embedded = self.token_embedding(ids)  # Shape: [batch_size, seq_len, dim_input]
 
         # Initialize hidden states for all layers
         hidden_states = [layer.init_hidden(batch_size, device) for layer in self.gru_layers]
@@ -219,10 +226,11 @@ class MultilayerBiGRU(nn.Module):
             attn_weights = nn.functional.softmax(attn_weights, dim=1)
 
             attn_output = torch.sum(attn_weights * outputs, dim=1)
-            logits = self.fc(attn_output)
-            preds = self.softmax(logits)
-            return preds
+            output = self.fc(attn_output)
+            assert output.size() == (batch_size, self.dim_output)
+            return output
         else:
-            outputs = self.fc(outputs)
-            outputs = self.softmax(outputs)
-            return outputs
+            logits = self.fc(outputs)
+            output = logits[range(batch_size), lengths - 1, :]
+            assert output.size() == (batch_size, self.dim_output)
+            return output

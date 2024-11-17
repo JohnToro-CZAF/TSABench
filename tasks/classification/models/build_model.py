@@ -1,27 +1,27 @@
 from typing import Dict
 from torch import nn
 from models import (
-    RNN, 
-    DeepRNN,
     BiDeepRNN, 
-    MultilayerRNN,
     MultilayerLSTM,
     MultilayerBiLSTM,
     MultilayerGRU,
     MultilayerBiGRU,
-    CNN
+    DeepGPT,
+    DeepBERT,
+    DeepT5,
+    HF,
 )
 
 MODULE_MAP = {
-    "RNN": RNN,
-    "DeepRNN": DeepRNN,
     "BiDeepRNN": BiDeepRNN,
-    "MultilayerRNN": MultilayerRNN,
     "LSTM": MultilayerLSTM,
     "BiLSTM": MultilayerBiLSTM,
     "GRU": MultilayerGRU,
     "BiGRU": MultilayerBiGRU,
-    "CNN": CNN
+    "GPT": DeepGPT,
+    "BERT": DeepBERT,
+    "T5": DeepT5,
+    "HF": HF,
 }
 
 def build_model(config: Dict, tokenizer)-> nn.Module:

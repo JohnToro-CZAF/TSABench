@@ -64,15 +64,16 @@ class DeepRNN(nn.Module):
     self.rnn_layers = nn.ModuleList([RNNLayer(dim_hidden, dim_hidden, direction=direction) for _ in range(num_layers)])
   
   def forward(self, input):
-
-    device = input.device
-    hidden = self.input_layer.init_hidden(input.size()[0], device=device)
-    embedded = self.token_embedding(input)
+    ids = input["input_ids"]
+    ids = ids.to("cuda")
+    device = ids.device
+    hidden = self.input_layer.init_hidden(ids.size()[0], device=device)
+    embedded = self.token_embedding(ids)
 
     outputs = self.input_layer(embedded, hidden)
     for i in range(self.num_layers):
-      hidden = self.rnn_layers[i].init_hidden(input.size()[0], device=device)
-      outputs = self.rnn_layers[i](outputs, hidden)
+      hidden = self.rnn_layers[i].init_hidden(ids.size()[0], device=device)
+      outputs = self.rnn_layers[i](outputs, hidden) # [bs, seq_len, dim_hidden]
     return outputs
 
   def init_hidden(self, batch_size):
@@ -97,6 +98,7 @@ class BiDeepRNN(nn.Module):
     self.softmax = nn.LogSoftmax(dim=-1)
 
   def forward(self, input):
+    lengths = input["lengths"]
     # Since we are dealing with Char-RNN task so we dont need to use all the output
     fs = self.rnn_layers_forward(input)
     bs = self.rnn_layers_backward(input)
@@ -109,9 +111,13 @@ class BiDeepRNN(nn.Module):
 
       attn_output = torch.sum(attn_weights * outputs, dim=1)
       logits = self.output_layer(attn_output)
-      preds = self.softmax(logits)
-      return preds
+      assert logits.size() == (input["input_ids"].size()[0], input["input_ids"].size()[1], self.dim_output)
+      output = logits[range(logits.size()[0]), lengths-1, :]
+      assert output.size() == (input["input_ids"].size()[0], self.dim_output)
+      return output
     else:
-      outputs = self.output_layer(outputs)
-      outputs = self.softmax(outputs)
-      return outputs
+      logits = self.output_layer(outputs)
+      assert logits.size() == (input["input_ids"].size()[0], input["input_ids"].size()[1], self.dim_output)
+      output = logits[range(outputs.size()[0]), lengths-1, :]
+      assert output.size() == (input["input_ids"].size()[0], self.dim_output)
+      return output

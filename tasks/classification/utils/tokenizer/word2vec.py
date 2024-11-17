@@ -10,6 +10,8 @@ from collections import Counter
 import gensim.downloader as api
 from nltk.tokenize import word_tokenize
 
+POSSIBLE_COLS = ["text", "sentence"]
+
 class NLTKTokenizer:
     def __init__(self, dataset="rotten_tomatoes", unk_id=None, pad_id=None):
         self.dataset = dataset
@@ -89,9 +91,16 @@ class NLTKTokenizerPretrainedDataset:
         """Build vocabulary from the given dataset."""
         dataset = load_dataset(dataset_name)
         train_dataset = dataset['train']
+        key = None
+        for k in POSSIBLE_COLS:
+            if k in train_dataset.column_names:
+                key = k
+                break
+        if key is None:
+            raise ValueError(f"None of the possible columns {POSSIBLE_COLS} found in dataset")
         vocab = Counter()
         for item in train_dataset:
-            tokens = word_tokenize(item['text'].lower())
+            tokens = word_tokenize(item[key].lower())
             vocab.update(tokens)
         
         vocab = {word: idx for idx, (word, _) in enumerate(vocab.items(), 0)}  # Index starts at 1

@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models import build_model
+from models.build_model import build_model
 from utils.tokenizer import build_tokenizer
 from trainer import Trainer, TrainingArgs, EarlyStopper
 from dataloader import get_dataloaders
