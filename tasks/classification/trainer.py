@@ -78,6 +78,10 @@ def get_flops(model, inp: Union[torch.Tensor, Tuple], with_backward=False):
     model.eval()
     
     inp = inp if isinstance(inp, torch.Tensor) else torch.randn(inp)
+    inp = {
+      "input_ids": inp,
+      "lengths": torch.tensor([inp.size(1)]).repeat(inp.size(0)),
+    }
 
     flop_counter = FlopCounterMode(mods=model, display=False, depth=None)
     with flop_counter:
@@ -380,7 +384,7 @@ class Trainer:
       torch.save(self.model.state_dict(), os.path.join(self.output_dir, 'model.pth'))
     self.test()
     # calculate TFLOPs
-    rand_inp = torch.randint(0, max_ids, input_shape)
+    rand_inp = torch.randint(0, max_ids, (bs, input_seq_len))
     self.metrics_log['TFLOPs'] = get_flops(self.model, rand_inp, with_backward=True)
     self.save_metrics()
 

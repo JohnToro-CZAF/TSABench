@@ -59,10 +59,10 @@ class DeepGPT(nn.Module):
 
         # Classification Head
         self.output_layer = nn.Linear(dim_model, kwargs.get('dim_output', 2))
-        self.softmax = nn.LogSoftmax(dim=-1)
 
     def forward(self, input):
         ids = input["input_ids"]
+        ids = ids.to("cuda")
         device = ids.device
 
         seq_len = ids.size(1)
@@ -83,4 +83,4 @@ class DeepGPT(nn.Module):
         output = output.transpose(0, 1)  # (batch_size, seq_len, dim_model)
         output = output[:, -1, :]  # Use last token representation
         logits = self.output_layer(output)
-        return self.softmax(logits)
+        return logits

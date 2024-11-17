@@ -55,11 +55,11 @@ class DeepT5(nn.Module):
         self.dim_model = dim_model
 
         # Classification Head
-        self.output_layer = nn.Linear(dim_model, kwargs.get('num_classes', 2))
-        self.softmax = nn.LogSoftmax(dim=-1)
+        self.output_layer = nn.Linear(dim_model, kwargs.get('dim_output', 2))
 
     def forward(self, input):
         ids = input["input_ids"]
+        ids = ids.to("cuda")
         device = ids.device
 
         embedded = self.token_embedding(ids)  # (batch_size, seq_len, dim_input)
@@ -75,4 +75,4 @@ class DeepT5(nn.Module):
         output = output.transpose(0, 1)  # (batch_size, seq_len, dim_model)
         output = output[:, 0, :]  # Use representation of the first token
         logits = self.output_layer(output)
-        return self.softmax(logits)
+        return logits

@@ -203,9 +203,9 @@ class MultilayerBiGRU(nn.Module):
         ids = input["input_ids"]
         lengths = input["lengths"]
         
-        device = ids.device
         batch_size = ids.size(0)
         ids = ids.to("cuda")
+        device = ids.device
 
         # Embedding layer
         embedded = self.token_embedding(ids)  # Shape: [batch_size, seq_len, dim_input]
