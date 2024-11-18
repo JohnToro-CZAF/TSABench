@@ -1,0 +1,40 @@
+{
+    "model_config": {
+        "model_type": "PretrainedBERT",
+        "args" : {
+            "num_labels": 2
+        }
+    },
+    "tokenizer_config": {
+        "tokenizer_type": "hf",
+        "args": {
+            "pretrained_path": "google-bert/bert-base-uncased"
+        }
+    },
+    "trainer_args": {
+        "task": "classification",
+        "training_batch_size": 2,
+        "validation_batch_size": 2,
+        "learning_rate": 0.0005,
+        "epoch": 30
+    }, 
+    "metric_config": {
+        "metrics": [
+            {"name": "accuracy", "args": {}},
+            {"name": "f1", "args": {"num_classes": 2}},
+            {"name": "precision", "args": {"num_classes": 2}},
+            {"name": "recall", "args": {"num_classes": 2}}
+        ]
+    },
+    "data_config": {
+        "name": "sst2",
+        "is_huggingface": true,
+        "type": "classification"
+    },
+    "analysis_config": {
+        "output_dir": "experiments/pretrainedbert/sst2",
+        "record_metrics": true,
+        "record_gradients": true,
+        "save_interval": 1000
+    }
+}

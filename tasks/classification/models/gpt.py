@@ -28,7 +28,7 @@ class GPTLayer(nn.Module):
 class DeepGPT(nn.Module):
     def __init__(
         self, dim_input, dim_model, num_layers, num_heads, dim_ff, tokenizer,
-        embedding_strategy='random', embedding_frozen=True, max_len=512, **kwargs
+        embedding_strategy='random', embedding_frozen=True, max_len=2048, **kwargs
     ):
         super(DeepGPT, self).__init__()
         self.tokenizer = tokenizer

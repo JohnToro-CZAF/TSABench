@@ -1,30 +1,21 @@
 {
     "model_config": {
-        "model_type": "T5",
+        "model_type": "PretrainedBERT",
         "args" : {
-            "dim_input": 300,
-            "dim_model": 256,
-            "num_layers": 1,
-            "num_heads": 8,
-            "dim_ff": 256,
-            "dim_output": 5,
-            "embedding_strategy": "word2vec",
-            "pretrained_path": "word2vec-google-news-300",
-            "embedding_frozen": false,
-            "oov_handing": "using_unk"
+            "num_labels": 5
         }
     },
     "tokenizer_config": {
-        "tokenizer_type": "nltk",
+        "tokenizer_type": "hf",
         "args": {
-            "dataset": "yelp_review_full"
+            "pretrained_path": "google-bert/bert-base-uncased"
         }
     },
     "trainer_args": {
         "task": "classification",
-        "training_batch_size": 256,
-        "validation_batch_size": 256,
-        "learning_rate": 0.0001,
+        "training_batch_size": 8,
+        "validation_batch_size": 8,
+        "learning_rate": 0.0005,
         "epoch": 30
     }, 
     "metric_config": {
@@ -41,7 +32,7 @@
         "type": "classification"
     },
     "analysis_config": {
-        "output_dir": "experiments/t5/yelp_review_full",
+        "output_dir": "experiments/pretrainedbert/yelp_review_full",
         "record_metrics": true,
         "record_gradients": true,
         "save_interval": 1000

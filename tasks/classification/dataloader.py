@@ -32,10 +32,14 @@ class ClassificationDataset(torch.utils.data.Dataset):
       item = self.dataset[idx]
       text = item[key]
       ids  = self.tokenizer.tokenize(text)["ids"]
+      ids  = ids[:min(len(ids), 511)]
+      label = item.get("label", 0)
+      if label < 0:
+        label = 0
       self.items.append(
         {
           "text": text,
-          "label": item['label'],
+          "label": label,
           "ids": ids,
           "length": len(ids)
         }

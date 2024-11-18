@@ -10,6 +10,9 @@ from models import (
     DeepBERT,
     DeepT5,
     HF,
+    PretrainedBERT,
+    PretrainedGPT,
+    PretrainedT5
 )
 
 MODULE_MAP = {
@@ -22,6 +25,9 @@ MODULE_MAP = {
     "BERT": DeepBERT,
     "T5": DeepT5,
     "HF": HF,
+    "PretrainedBERT": PretrainedBERT,
+    "PretrainedGPT": PretrainedGPT,
+    "PretrainedT5": PretrainedT5
 }
 
 def build_model(config: Dict, tokenizer)-> nn.Module:
